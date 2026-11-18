@@ -3,6 +3,7 @@
 // paints this state, input.js drives it.
 
 import { LEVELS } from './levels.js';
+import { coinForLevel } from './coins.js';
 import { cellIsFree } from './puzzle.js';
 import { HINTS_PER_LEVEL, MAX_MISTAKES, PAR_TIME, SCORE, STARS, STORE } from './config.js';
 
@@ -69,6 +70,8 @@ export function createGame() {
     n: 0,
     regions: [],
     solution: [],
+    /** The coin hidden on this level: one per level, BTC only on level 30. */
+    coin: coinForLevel(0),
     /** Placed coins: key -> { row, col, byHint }. */
     placed: new Map(),
     /** Eliminated cells, marked with an X: a set of keys. */
@@ -113,6 +116,7 @@ export function createGame() {
     game.n = level.n;
     game.regions = level.regions;
     game.solution = level.solution;
+    game.coin = coinForLevel(index);
     game.placed = new Map();
     game.marks = new Set();
     game.undoStack = [];

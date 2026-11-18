@@ -6,7 +6,7 @@
 html, body {
   margin: 0;
   min-height: 100%;
-  background: #10131a;
+  background: radial-gradient(ellipse 90% 55% at 50% -5%, rgba(247, 180, 60, 0.12), rgba(16, 19, 26, 0) 70%), #10131a;
   color: #f3ede0;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
@@ -39,6 +39,17 @@ button:disabled { cursor: default; }
 .btn-big:hover:not(:disabled) { background: #ffa940; border-color: #ffa940; }
 .btn.active { background: #f7931a; color: #241300; border-color: #f7931a; }
 
+/* A coin face: a metallic circle in the coin's brand colour. The colours
+   come from CSS custom properties (--coin, --coin-light, --coin-dark,
+   --coin-ink) set inline per coin, so every level's coin looks its own. */
+.coin-face {
+  background: radial-gradient(circle at 35% 30%, var(--coin-light), var(--coin) 55%, var(--coin-dark));
+  color: var(--coin-ink);
+  font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45), inset 0 -2px 0 rgba(0, 0, 0, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
 /* ---- Title screen ---- */
 .title-wrap {
   width: min(92vw, 760px);
@@ -50,16 +61,20 @@ button:disabled { cursor: default; }
   height: 96px;
   margin: 0 auto 8px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #ffd88a, #f7931a 55%, #c26f06);
-  color: #3a2400;
+  background: radial-gradient(circle at 35% 30%, var(--coin-light, #ffd88a), var(--coin, #f7931a) 55%, var(--coin-dark, #c26f06));
+  color: var(--coin-ink, #3a2400);
   font-size: 58px;
   font-weight: 800;
   line-height: 96px;
-  box-shadow: 0 6px 24px rgba(247, 147, 26, 0.35), inset 0 -3px 0 rgba(0, 0, 0, 0.25);
+  box-shadow: 0 0 44px rgba(247, 180, 60, 0.28), 0 6px 24px rgba(0, 0, 0, 0.45), inset 0 -3px 0 rgba(0, 0, 0, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 .title-wrap h1 { font-size: 44px; margin: 12px 0 8px; letter-spacing: -0.5px; }
 .tagline { color: #9aa3b2; font-size: 17px; line-height: 1.5; margin: 0 auto 18px; max-width: 560px; }
-.title-stats { display: flex; gap: 24px; justify-content: center; color: #ffcf87; font-weight: 700; margin-bottom: 20px; }
+.title-stats { display: flex; gap: 24px; justify-content: center; color: #ffcf87; font-weight: 700; margin-bottom: 12px; }
+.collection-progress { max-width: 420px; margin: 0 auto 20px; }
+.collection-progress span { font-size: 13px; color: #ffcf87; font-weight: 700; }
+.collection-progress-bar { height: 6px; background: #1b2029; border: 1px solid #2c3442; border-radius: 3px; overflow: hidden; margin-top: 6px; }
+.collection-progress-bar > div { height: 100%; background: linear-gradient(90deg, #f7931a, #ffcf87); border-radius: 3px; transition: width 0.3s ease; }
 .title-buttons { display: flex; gap: 12px; justify-content: center; margin-bottom: 28px; }
 .title-wrap h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 2px; color: #9aa3b2; margin: 0 0 12px; }
 .level-grid {
@@ -84,6 +99,7 @@ button:disabled { cursor: default; }
 .level-btn.locked { opacity: 0.45; color: #9aa3b2; }
 .level-num { font-size: 17px; font-weight: 700; }
 .level-stars { font-size: 11px; color: #ffcf87; letter-spacing: 1px; }
+.level-coin { width: 26px; height: 26px; border-radius: 50%; font-size: 15px; flex: none; }
 .keys { color: #9aa3b2; font-size: 13px; }
 .keys b { color: #f3ede0; }
 
@@ -120,12 +136,20 @@ button:disabled { cursor: default; }
 .mini-cell.mini-bad { outline: 2px solid #e5484d; outline-offset: -2px; }
 .mini-coin {
   position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  color: #3a2400; font-weight: 800; font-size: 15px;
-  background: radial-gradient(circle at 35% 30%, #ffd88a, #f7931a 60%, #c26f06);
+  color: var(--coin-ink);
+  font-size: 15px;
   border-radius: 50%;
   margin: 2px;
 }
+.win-coin { width: 120px; height: 120px; margin: 0 auto 4px; }
+.win-coin-face {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  font-size: 62px;
+  box-shadow: 0 0 36px rgba(255, 207, 135, 0.4), 0 4px 14px rgba(0, 0, 0, 0.5), inset 0 -3px 0 rgba(0, 0, 0, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+  animation: coin-in 0.3s ease-out;
+}
+.win-coin-name { color: #ffcf87 !important; font-weight: 700; font-size: 16px; margin: 0 0 8px !important; }
 .win-stars { font-size: 44px; color: #ffcf87; letter-spacing: 6px; margin-bottom: 4px; }
 .win-stats { display: flex; gap: 28px; justify-content: center; margin-bottom: 20px; }
 .win-stats > div { display: flex; flex-direction: column; gap: 2px; }
@@ -151,14 +175,56 @@ button:disabled { cursor: default; }
   border: 2px solid #e5484d; display: inline-block;
 }
 .mistake-dot.spent { background: #e5484d; }
+
+/* ---- Collection panel: the coin being assembled, piece by piece ---- */
+.collection {
+  display: flex; gap: 14px; align-items: center;
+  background: #181d27; border: 1px solid #262d3b; border-radius: 12px;
+  padding: 8px 14px; margin-bottom: 12px;
+}
+.assembly {
+  position: relative;
+  width: 64px; height: 64px; flex: none;
+  border-radius: 50%;
+  border: 2px dashed rgba(255, 255, 255, 0.22);
+  background: rgba(0, 0, 0, 0.35);
+}
+.assembly.complete {
+  border-style: solid;
+  border-color: #ffcf87;
+  box-shadow: 0 0 20px rgba(255, 207, 135, 0.45);
+}
+.assembly-slice {
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  font-size: 26px;
+  opacity: 0.07;
+  transition: opacity 0.25s ease;
+}
+.assembly-slice.found { opacity: 1; }
+.collection-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.collection-name { font-size: 16px; font-weight: 700; }
+.collection-count { font-size: 13px; color: #9aa3b2; }
+.collection-bar { height: 6px; background: #0b0d12; border-radius: 3px; overflow: hidden; }
+.collection-bar > div { height: 100%; background: linear-gradient(90deg, #f7931a, #ffcf87); border-radius: 3px; transition: width 0.3s ease; }
+
+/* A piece flying from its board cell to the collection panel. */
+.fly-piece {
+  position: fixed;
+  width: 44px; height: 44px;
+  z-index: 60;
+  pointer-events: none;
+}
+.fly-piece .coin-face { width: 100%; height: 100%; border-radius: 50%; font-size: 26px; }
+
 .board {
   --cols: 10;
   display: grid;
   grid-template-columns: repeat(var(--cols), 1fr);
   gap: 2px;
-  /* The board stays square and small enough that the HUD, the rule line and
-     the controls all fit in a 720 px viewport with it. */
-  width: min(100%, 62vh);
+  /* The board stays square and small enough that the HUD, the collection
+     panel, the rule line and the controls all fit in a 720 px viewport. */
+  width: min(100%, 56vh);
   margin: 0 auto;
   background: #0b0d12;
   border: 2px solid #0b0d12;
@@ -174,7 +240,7 @@ button:disabled { cursor: default; }
   border-radius: 2px;
   display: flex; align-items: center; justify-content: center;
 }
-.cell:hover { filter: brightness(1.18); }
+.cell:hover { filter: brightness(1.18); outline: 2px solid rgba(255, 255, 255, 0.35); outline-offset: -2px; }
 .cell.b-top { box-shadow: inset 0 2px 0 #0b0d12; }
 .cell.b-bottom { box-shadow: inset 0 -2px 0 #0b0d12; }
 .cell.b-left { box-shadow: inset 2px 0 0 #0b0d12; }
@@ -192,19 +258,17 @@ button:disabled { cursor: default; }
 .cell.b-top.b-bottom.b-left.b-right { box-shadow: inset 0 0 0 2px #0b0d12; }
 .cell.preview-line { filter: brightness(1.22); }
 .cell.preview-region { outline: 2px solid rgba(255, 255, 255, 0.35); outline-offset: -2px; }
+/* The coin on a board cell: one pie slice of the level's coin (slice = its
+   row). The clip-path is set inline per coin. */
 .coin {
   width: 74%; height: 74%;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #ffd88a, #f7931a 55%, #c26f06);
-  color: #3a2400;
   font-size: calc(10px + 1.1vw);
-  font-weight: 800;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45), inset 0 -2px 0 rgba(0, 0, 0, 0.25);
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
   animation: coin-in 0.18s ease-out;
 }
 @keyframes coin-in { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-.cell.hint-coin .coin { box-shadow: 0 0 0 2px #ffcf87, 0 0 14px rgba(255, 207, 135, 0.7); }
+.cell.hint-coin { outline: 2px solid #ffcf87; outline-offset: -2px; }
 .mark { color: rgba(255, 255, 255, 0.75); font-size: calc(12px + 1.2vw); font-weight: 700; line-height: 1; }
 .cell.flash { background: #e5484d !important; animation: flash 0.9s ease-out; }
 @keyframes flash { 0%, 100% { filter: none; } 25% { filter: brightness(1.6); } }

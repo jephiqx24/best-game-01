@@ -1,9 +1,12 @@
 // Where Is My Coin — the renderer: every screen is built once as DOM and
 // shown or hidden; the board is a grid of buttons, one per cell, coloured by
-// region with a thick outline where the region changes. Coins are gold
-// circles with the ₿ glyph, marks are an ×, conflicts flash red.
+// region with a thick outline where the region changes. Coins are fragments:
+// each level hides one coin, split into as many pie slices as there are coins
+// to find; a placed coin shows its slice, and the slice flies to the
+// collection panel, where the coin is assembled piece by piece.
 
 import { PALETTE, PAR_TIME } from './config.js';
+import { applyCoinStyle, coinForLevel, sliceClip } from './coins.js';
 import { cellKey, levelList, SCREEN_FAIL, SCREEN_HOWTO, SCREEN_PLAY, SCREEN_TITLE, SCREEN_WIN } from './state.js';
 import { regionAt } from './puzzle.js';
 
@@ -32,13 +35,17 @@ export function createRenderer(app, game) {
   app.innerHTML = `
   <div id="screen-title" class="screen">
     <div class="title-wrap">
-      <div class="title-coin" aria-hidden="true">₿</div>
+      <div class="title-coin" id="title-coin" aria-hidden="true"></div>
       <h1>Where Is My Coin</h1>
-      <p class="tagline">Ten coins are hiding in the vault. Find them all — one per row,
-        one per column, one per colour, never touching.</p>
+      <p class="tagline">A coin hides in the vault, broken into pieces. Find them all — one per row,
+        one per column, one per colour, never touching — and the coin is yours.</p>
       <div class="title-stats">
         <span id="title-sats">0 sats</span>
         <span id="title-cleared">0 / 30 cleared</span>
+      </div>
+      <div class="collection-progress">
+        <span id="collection-progress-text">0 / 30 coins collected</span>
+        <div class="collection-progress-bar"><div id="collection-progress-fill"></div></div>
       </div>
       <div class="title-buttons">
         <button id="btn-play" class="btn btn-big">Play</button>
@@ -52,13 +59,14 @@ export function createRenderer(app, game) {
   <div id="screen-howto" class="screen overlay" hidden>
     <div class="panel">
       <h2>How to Play</h2>
-      <p>Tap a cell to hide a coin there. Hide every coin and the vault opens.</p>
+      <p>Tap a cell to place a piece of the coin there. Find every piece and the coin is whole.</p>
       <div id="howto-rules"></div>
       <ul class="howto-notes">
         <li>Right-click (or the Mark × tool) crosses out a cell that cannot hold a coin.</li>
         <li>A coin that breaks a rule is refused and costs a mistake. Three mistakes lock the vault.</li>
         <li><b>H</b> reveals one true coin (3 per level). <b>U</b> undoes a move. <b>R</b> restarts the level.</li>
         <li>Beat the par time with no mistakes for 3 stars — and more sats.</li>
+        <li>Every level hides a different coin — Bitcoin waits on level 30.</li>
       </ul>
       <button id="btn-close-howto" class="btn btn-big">Got it</button>
     </div>
@@ -71,6 +79,14 @@ export function createRenderer(app, game) {
         <div class="hud-item"><span class="hud-label">Sats</span><span id="hud-sats">0</span></div>
         <div class="hud-item"><span class="hud-label">Hints</span><span id="hud-hints">3</span></div>
         <div class="hud-item"><span class="hud-label">Mistakes</span><span id="hud-mistakes" class="mistakes"></span></div>
+      </div>
+      <div id="collection" class="collection">
+        <div id="assembly" class="assembly" aria-label="Coin being assembled"></div>
+        <div class="collection-info">
+          <span id="collection-name" class="collection-name"></span>
+          <span id="collection-count" class="collection-count"></span>
+          <div class="collection-bar"><div id="collection-fill"></div></div>
+        </div>
       </div>
       <div id="board" class="board" role="grid" aria-label="Coin board"></div>
       <p id="rule-line" class="rule-line">One coin per row, column and colour — and no two coins may touch, not even diagonally.</p>
@@ -86,6 +102,8 @@ export function createRenderer(app, game) {
   </div>
   <div id="screen-win" class="screen overlay" hidden>
     <div class="panel">
+      <div id="win-coin" class="win-coin" aria-hidden="true"></div>
+      <p id="win-coin-name" class="win-coin-name"></p>
       <div id="win-stars" class="win-stars">★★★</div>
       <h2>Vault Open!</h2>
       <p id="win-line">Every coin found.</p>
@@ -121,7 +139,22 @@ export function createRenderer(app, game) {
     [SCREEN_FAIL]: document.getElementById('screen-fail'),
   };
   const boardEl = document.getElementById('board');
+  const assemblyEl = document.getElementById('assembly');
   let cells = [];
+  /** The assembly slices: one pie-slice element per row, built per level. */
+  let assemblySlices = [];
+  /** Rows whose piece is mid-flight to the collection panel: their assembly
+   *  slice stays hidden until the piece lands. */
+  const pendingFly = new Set();
+
+  /** A coin face: a metallic circle in the coin's brand colour, with its glyph. */
+  function coinFaceEl(coin, extraClass = '') {
+    const el = document.createElement('span');
+    el.className = `coin-face${extraClass ? ` ${extraClass}` : ''}`;
+    applyCoinStyle(el, coin);
+    el.textContent = coin.glyph;
+    return el;
+  }
 
   /** Announce a change for screen readers. */
   function announce(message) {
@@ -139,29 +172,101 @@ export function createRenderer(app, game) {
     return classes.join(' ');
   }
 
-  /** Build the board grid for the current level. */
+  /** Build the board grid for the current level, and the empty coin assembly
+   *  (one pie slice per row) for the collection panel. */
   function buildBoard() {
     const n = game.n;
     boardEl.style.setProperty('--cols', n);
     boardEl.innerHTML = '';
     cells = [];
+    // A fresh board cancels any piece still flying to the panel.
+    pendingFly.clear();
+    for (const fly of document.querySelectorAll('.fly-piece')) fly.remove();
     for (let row = 0; row < n; row += 1) {
       for (let col = 0; col < n; col += 1) {
         const cell = document.createElement('button');
         cell.className = `cell ${borderClasses(n, game.regions, row, col)}`;
         cell.dataset.row = row;
         cell.dataset.col = col;
-        cell.style.background = PALETTE.regions[regionAt(game.regions, n, row, col)];
+        cell.style.background = `linear-gradient(180deg, rgba(255,255,255,0.07), rgba(0,0,0,0.10)), ${PALETTE.regions[regionAt(game.regions, n, row, col)]}`;
         cell.setAttribute('role', 'gridcell');
         cell.setAttribute('aria-label', `Row ${row + 1}, column ${col + 1}`);
         boardEl.appendChild(cell);
         cells.push(cell);
       }
     }
+    // The assembly: the level's coin, split into n slices, each hidden until
+    // its row's coin is found.
+    assemblyEl.innerHTML = '';
+    assemblySlices = [];
+    for (let k = 0; k < n; k += 1) {
+      const slice = coinFaceEl(game.coin, 'assembly-slice');
+      slice.style.clipPath = sliceClip(k, n);
+      assemblyEl.appendChild(slice);
+      assemblySlices.push(slice);
+    }
     paintBoard();
+    updateCollection();
   }
 
-  /** Paint coins and marks from the state onto the cells. */
+  /** The collection panel: the coin name, how many pieces are found, and the
+   *  assembly circle with the found slices filled in. */
+  function updateCollection() {
+    const n = game.n;
+    if (!n || assemblySlices.length !== n) return;
+    const coin = game.coin;
+    document.getElementById('collection-name').textContent = `${coin.name} (${coin.ticker})`;
+    const rowsFound = new Set([...game.placed.values()].map((c) => c.row));
+    const found = rowsFound.size;
+    document.getElementById('collection-count').textContent = `${found} / ${n} pieces`;
+    document.getElementById('collection-fill').style.width = `${(found / n) * 100}%`;
+    for (let k = 0; k < n; k += 1) {
+      const slice = assemblySlices[k];
+      const visible = rowsFound.has(k) && !pendingFly.has(k);
+      slice.classList.toggle('found', visible);
+    }
+    assemblyEl.classList.toggle('complete', found === n);
+  }
+
+  /** Fly a found piece from its board cell to the collection panel. The
+   *  assembly slice for that row stays hidden until the piece lands. */
+  function flyPiece(row, col) {
+    const n = game.n;
+    const cell = cells[row * n + col];
+    if (!cell || !assemblyEl) return;
+    const from = cell.getBoundingClientRect();
+    const to = assemblyEl.getBoundingClientRect();
+    const fly = document.createElement('div');
+    fly.className = 'fly-piece';
+    const face = coinFaceEl(game.coin);
+    face.style.clipPath = sliceClip(row, n);
+    fly.appendChild(face);
+    fly.style.left = `${from.x + from.width / 2}px`;
+    fly.style.top = `${from.y + from.height / 2}px`;
+    document.body.appendChild(fly);
+    pendingFly.add(row);
+    const dx = (to.x + to.width / 2) - (from.x + from.width / 2);
+    const dy = (to.y + to.height / 2) - (from.y + from.height / 2);
+    const anim = fly.animate([
+      { transform: 'translate(-50%, -50%) scale(1) rotate(0deg)', opacity: 1 },
+      { transform: `translate(calc(-50% + ${dx * 0.5}px), calc(-50% + ${dy * 0.5 - 40}px)) scale(0.8) rotate(140deg)`, opacity: 1, offset: 0.55 },
+      { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0.45) rotate(260deg)`, opacity: 0.85 },
+    ], { duration: 600, easing: 'cubic-bezier(0.3, 0.7, 0.4, 1)' });
+    const land = () => {
+      fly.remove();
+      pendingFly.delete(row);
+      updateCollection();
+    };
+    anim.onfinish = land;
+    // If the animation never finishes (tab hidden), land anyway.
+    window.setTimeout(() => {
+      if (fly.isConnected) land();
+    }, 900);
+  }
+
+  /** Paint coins and marks from the state onto the cells. A placed coin shows
+   *  its pie slice of the level's coin (slice = its row, so a finished board
+   *  holds every slice exactly once). */
   function paintBoard() {
     const n = game.n;
     for (const cell of cells) {
@@ -174,9 +279,8 @@ export function createRenderer(app, game) {
       if (coin) {
         cell.classList.add('has-coin');
         if (coin.byHint) cell.classList.add('hint-coin');
-        const coinEl = document.createElement('span');
-        coinEl.className = 'coin';
-        coinEl.textContent = '₿';
+        const coinEl = coinFaceEl(game.coin, 'coin');
+        coinEl.style.clipPath = sliceClip(row, n);
         cell.appendChild(coinEl);
       } else if (game.marks.has(key)) {
         cell.classList.add('has-mark');
@@ -205,32 +309,47 @@ export function createRenderer(app, game) {
     document.getElementById('btn-mark').setAttribute('aria-pressed', game.markMode ? 'true' : 'false');
     document.getElementById('btn-mark').classList.toggle('active', game.markMode);
     document.getElementById('btn-sound').textContent = game.muted ? 'Sound Off' : 'Sound On';
+    updateCollection();
   }
 
-  /** The level grid on the title screen, with stars and locks. */
+  /** The level grid on the title screen, with stars and locks. Each level
+   *  shows its own coin, so levels are told apart at a glance. */
   function renderTitle() {
     const cleared = game.progress.stars.filter((s) => s > 0).length;
     document.getElementById('title-sats').textContent = `${formatSats(game.totalSats())} sats`;
     document.getElementById('title-cleared').textContent = `${cleared} / 30 cleared`;
+    document.getElementById('collection-progress-text').textContent = `${cleared} / 30 coins collected`;
+    document.getElementById('collection-progress-fill').style.width = `${(cleared / 30) * 100}%`;
+    // The big coin up top is the selected level's coin (the last one played,
+    // or Dogecoin on a fresh visit) — Bitcoin only appears on level 30.
+    const titleCoin = document.getElementById('title-coin');
+    const showcase = coinForLevel(game.selectedLevel);
+    titleCoin.textContent = showcase.glyph;
+    applyCoinStyle(titleCoin, showcase);
     const grid = document.getElementById('level-grid');
     grid.innerHTML = '';
     for (const level of levelList(game)) {
+      const coin = coinForLevel(level.index);
       const button = document.createElement('button');
       button.className = `level-btn${level.locked ? ' locked' : ''}${level.index === game.selectedLevel ? ' selected' : ''}`;
       button.disabled = level.locked;
       button.dataset.level = level.index;
+      const coinEl = coinFaceEl(coin, 'level-coin');
+      const coinHtml = coinEl.outerHTML;
       button.innerHTML = level.locked
         ? `${LOCK_SVG}<span class="level-num">${level.index + 1}</span>`
-        : `<span class="level-num">${level.index + 1}</span><span class="level-stars">${starsText(level.stars)}</span>`;
-      button.setAttribute('aria-label', `Level ${level.index + 1}, ${level.n} by ${level.n}${level.locked ? ', locked' : level.stars ? `, ${level.stars} stars` : ''}`);
+        : `${coinHtml}<span class="level-num">${level.index + 1}</span><span class="level-stars">${starsText(level.stars)}</span>`;
+      button.setAttribute('aria-label', `Level ${level.index + 1}, ${level.n} by ${level.n}, ${coin.name}${level.locked ? ', locked' : level.stars ? `, ${level.stars} stars` : ''}`);
       grid.appendChild(button);
     }
   }
 
   /** Four mini rule diagrams for the How to Play screen. Each is a 4x4 grid
    * with its own region layout, showing two coins that break exactly the
-   * named rule (and no other): same row, same column, same colour, touching. */
+   * named rule (and no other): same row, same column, same colour, touching.
+   * The coins are the selected level's coin. */
   function renderHowto() {
+    const coin = coinForLevel(game.selectedLevel);
     const rules = [
       {
         title: 'One per row',
@@ -267,10 +386,8 @@ export function createRenderer(app, game) {
           cell.style.background = PALETTE.regions[rule.regions[row][col]];
           if (rule.coins.some(([r, c]) => r === row && c === col)) {
             cell.classList.add('mini-bad');
-            const coin = document.createElement('span');
-            coin.className = 'mini-coin';
-            coin.textContent = '₿';
-            cell.appendChild(coin);
+            const miniCoin = coinFaceEl(coin, 'mini-coin');
+            cell.appendChild(miniCoin);
           }
           grid.appendChild(cell);
         }
@@ -283,8 +400,16 @@ export function createRenderer(app, game) {
     }
   }
 
-  /** The win overlay: stars, sats, time, par. */
+  /** The win overlay: the assembled coin, stars, sats, time, par. */
   function renderWin() {
+    const coin = game.coin;
+    const winCoin = document.getElementById('win-coin');
+    winCoin.innerHTML = '';
+    winCoin.appendChild(coinFaceEl(coin, 'win-coin-face'));
+    document.getElementById('win-coin-name').textContent =
+      game.levelIndex === 29
+        ? `The Bitcoin is yours — every coin in the vault is found.`
+        : `${coin.name} (${coin.ticker}) — complete!`;
     document.getElementById('win-stars').textContent = starsText(game.stars);
     document.getElementById('win-line').textContent =
       game.stars === 3
@@ -372,6 +497,8 @@ export function createRenderer(app, game) {
     buildBoard,
     paintBoard,
     updateHud,
+    updateCollection,
+    flyPiece,
     renderTitle,
     flashViolation,
     previewCell,

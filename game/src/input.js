@@ -41,13 +41,20 @@ export function attachInput(game, renderer, sound) {
     if (result.ok) {
       sound.place();
       renderer.announce(`Coin placed. ${game.placed.size} of ${game.n}.`);
+      // The piece flies to the collection panel (only while still playing;
+      // on the winning move the win screen shows the whole coin instead).
+      // flyPiece goes first: it hides this row's assembly slice until the
+      // piece lands, so the panel fills in on arrival, not before.
+      if (game.screen === SCREEN_PLAY) renderer.flyPiece(cell.row, cell.col);
+      renderer.paintBoard();
+      renderer.updateHud();
     } else {
       sound.error();
       renderer.flashViolation();
       renderer.announce(`Not there. Mistake ${game.mistakes} of 3.`);
+      renderer.paintBoard();
+      renderer.updateHud();
     }
-    renderer.paintBoard();
-    renderer.updateHud();
     if (game.screen !== SCREEN_PLAY) renderer.show();
   }
 
@@ -111,9 +118,10 @@ export function attachInput(game, renderer, sound) {
     if (hint) {
       sound.hint();
       renderer.announce(`Hint: a coin hides in row ${hint.row + 1}, column ${hint.col + 1}.`);
+      if (game.screen === SCREEN_PLAY) renderer.flyPiece(hint.row, hint.col);
+      renderer.paintBoard();
+      renderer.updateHud();
     }
-    renderer.paintBoard();
-    renderer.updateHud();
     if (game.screen !== SCREEN_PLAY) renderer.show();
   });
   on('btn-undo', () => {

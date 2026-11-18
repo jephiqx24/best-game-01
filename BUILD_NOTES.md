@@ -2,12 +2,16 @@
 
 ## What it is
 
-A BTC-themed Queens logic puzzle, built from scratch in this session. Ten
-coins hide in the vault; the player finds them all — exactly one coin per row,
-one per column, one per colour region, and no two coins touching, not even
-diagonally. 30 levels, each with exactly one solution. No framework, no
-external images, fonts, or network requests; all art is code-drawn (CSS/SVG,
-the ₿ glyph on a gold circle). Desktop-first, plays at 1440×900 and 1280×720.
+A coin-collecting Queens logic puzzle, built from scratch in this session.
+Each level hides one coin, broken into pieces: the player finds the pieces —
+exactly one coin per row, one per column, one per colour region, and no two
+coins touching, not even diagonally — and each correct placement flies its
+piece to the collection panel, where the coin is assembled. Find every piece
+and the coin is whole. 30 levels, each with exactly one solution, each with
+a different coin (Dogecoin on level 1 … Bitcoin only on level 30). No
+framework, no external images, fonts, or network requests; all art is
+code-drawn (CSS/SVG, one glyph per coin on a metallic circle). Desktop-first,
+plays at 1440×900 and 1280×720.
 
 ## Files
 
@@ -18,12 +22,17 @@ the ₿ glyph on a gold circle). Desktop-first, plays at 1440×900 and 1280×720
 - `game/src/puzzle.js` (339 lines) — the solver (`countSolutions`, returns
   witnesses), the region generator, and the level generator (`generateLevel`).
 - `game/src/levels.js` — the 30 generated levels (n, regions, solution).
+- `game/src/coins.js` — the 30 coins (one per level, BTC only on level 30):
+  id, name, ticker, glyph, brand colour, ink colour; `sliceClip(k, n)` gives
+  the CSS clip-path polygon for pie slice k of n; `applyCoinStyle` sets a
+  coin's colours as CSS variables on an element.
 - `game/src/state.js` (269 lines) — screens, place/remove/mark/hint/undo/
   restart/finish, stars, sats, progress in localStorage (best stars + best
   sats per level; total sats is the sum of bests, so replays never farm).
-- `game/src/render.js` (366 lines) — screens, board grid with region-border
-  classes, ₿ coins, × marks, HUD, win/fail overlays, hover preview, violation
-  flash, How-to-Play mini diagrams.
+- `game/src/render.js` — screens, board grid with region-border classes,
+  coin-slice pieces, × marks, HUD, collection panel (the coin assembled
+  piece by piece), win/fail overlays, hover preview, violation flash,
+  How-to-Play mini diagrams.
 - `game/src/input.js` — click, right-click mark, buttons, keyboard
   (H hint, U undo, R restart, M sound, N next level, Esc/Enter).
 - `game/src/sound.js` — WebAudio beeps only (place/error/hint/win/fail/
@@ -82,6 +91,22 @@ Solver node counts (a heuristic difficulty proxy — see Known gaps):
 | 496, 619, 959, 1430, 2323 | 247, 462, 738, 1058, 1075 | 1147, 1749, 2479, 2480, 2687 | 3804, 7758, 8166, 10991, 11836 | 15329, 17383, 19132, 20255, 22027 | 26542, 29165, 42267, 79859, 90672 |
 
 Total solver nodes across all 30 levels: 425,135.
+
+## The coin fragments (added 2026-11-18)
+
+Each level hides one coin (`game/src/coins.js`, 30 distinct coins, BTC only
+on level 30 — DOGE 1, SOL 2, ETH 3, BNB 4, DOT 5, LTC 6, AVAX 7, ADA 8,
+NEAR 9, LINK 10, SHIB 11, ATOM 12, XRP 13, TRX 14, XLM 15, UNI 16, MATIC 17,
+PEPE 18, ARB 19, OP 20, TON 21, WIF 22, SUI 23, FLOKI 24, INJ 25, ZEC 26,
+THETA 27, EGLD 28, KAVA 29, BTC 30; no two adjacent levels share a hue
+family). The coin is split into n pie slices (n = 8 or 10, the board size);
+a placed coin shows the slice for its row (slice = row, so a finished board
+holds every slice exactly once). On a correct placement the piece flies
+(600 ms arc) from the cell to the collection panel and fills its slice
+there; wrong placements fly nothing; undo removes the slice. When all
+pieces are found the win screen shows the whole coin. The title screen
+shows each level's coin on its button and a "X / 30 coins collected" bar.
+Puzzle logic, levels and solutions are untouched — only the presentation.
 
 ## Verification gates
 
